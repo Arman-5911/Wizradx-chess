@@ -2,7 +2,10 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#090a0f">
     <title>Wizard's Chess — Gothic Cathedral 3D</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,9 +23,9 @@
 
     <style>
         :root {
-            --md-surface: rgba(18, 19, 26, 0.82);
-            --md-surface-elevated: rgba(28, 30, 42, 0.90);
-            --md-border: rgba(255, 255, 255, 0.11);
+            --md-surface: rgba(18, 19, 26, 0.85);
+            --md-surface-elevated: rgba(28, 30, 42, 0.92);
+            --md-border: rgba(255, 255, 255, 0.12);
             --md-primary-marble: #f3ead8;
             --md-primary-obsidian: #c084fc;
         }
@@ -31,6 +34,8 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body, html {
@@ -38,7 +43,10 @@
             padding: 0;
             width: 100%;
             height: 100%;
+            height: 100dvh;
             overflow: hidden;
+            overscroll-behavior: none;
+            touch-action: none;
             background-color: #090a0f;
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             color: #eceef4;
@@ -55,6 +63,7 @@
             width: 100%;
             height: 100%;
             z-index: 1;
+            touch-action: none;
         }
 
         canvas {
@@ -62,10 +71,24 @@
             width: 100%;
             height: 100%;
             cursor: grab;
+            touch-action: none;
         }
 
         canvas:active {
             cursor: grabbing;
+        }
+
+        /* Safe area utilities for notched mobile screens */
+        .safe-top {
+            padding-top: max(0.5rem, env(safe-area-inset-top));
+            padding-left: max(0.5rem, env(safe-area-inset-left));
+            padding-right: max(0.5rem, env(safe-area-inset-right));
+        }
+
+        .safe-bottom {
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+            padding-left: max(0.5rem, env(safe-area-inset-left));
+            padding-right: max(0.5rem, env(safe-area-inset-right));
         }
 
         /* Material Design 3 Glass Surface */
@@ -133,160 +156,162 @@
     <!-- 3D Viewport Container -->
     <div id="canvas-container"></div>
 
-    <!-- SINGLE-LEVEL NAVIGATION HUD (Material Design 3 Floating Bars) -->
+    <!-- SINGLE-LEVEL NAVIGATION HUD (Material Design 3 Floating Bars — Mobile & Desktop Optimized) -->
     <!-- Top Floating Bar: Title, Turn Indicator, Online Room Pill, Captured Pieces, & Move Log Strip -->
-    <header class="fixed top-0 left-0 right-0 z-20 p-2.5 sm:p-4 pointer-events-none flex flex-col gap-2 max-w-7xl mx-auto">
-        <div class="flex flex-wrap items-center justify-between gap-2">
+    <header class="fixed top-0 left-0 right-0 z-20 safe-top p-2 sm:p-3.5 pointer-events-none flex flex-col gap-1.5 max-w-7xl mx-auto">
+        <div class="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
             
             <!-- Brand & Turn Status Pill -->
-            <div class="md-card pointer-events-auto rounded-2xl px-3.5 py-2 flex flex-wrap items-center gap-2.5 sm:gap-3">
-                <div class="flex items-center gap-2">
-                    <span class="material-symbols-rounded text-amber-300 text-2xl">castle</span>
+            <div class="md-card pointer-events-auto rounded-2xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex flex-wrap items-center gap-2 sm:gap-3 max-w-full">
+                <div class="flex items-center gap-1.5 sm:gap-2">
+                    <span class="material-symbols-rounded text-amber-300 text-xl sm:text-2xl">castle</span>
                     <div>
                         <div class="flex items-center gap-1.5">
-                            <h1 class="font-gothic text-xs sm:text-sm font-bold tracking-wider text-amber-100 leading-tight">WIZARD'S CHESS</h1>
-                            <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-[9px] font-semibold text-emerald-300 tracking-wide" title="Strict Fair Play — Standard FIDE/Chess Rules, No Assistance or Takebacks">
+                            <h1 class="font-gothic text-[11px] sm:text-sm font-bold tracking-wider text-amber-100 leading-tight">WIZARD'S CHESS</h1>
+                            <span class="hidden xs:inline-flex sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-[9px] font-semibold text-emerald-300 tracking-wide" title="Strict Fair Play — Standard FIDE/Chess Rules, No Assistance or Takebacks">
                                 <span class="material-symbols-rounded" style="font-size:11px;">verified_user</span>
                                 FAIR PLAY
                             </span>
                         </div>
-                        <p class="text-[10px] text-slate-400 hidden sm:block">Sanctum of Marble &amp; Obsidian</p>
+                        <p class="text-[10px] text-slate-400 hidden md:block">Sanctum of Marble &amp; Obsidian</p>
                     </div>
                 </div>
 
-                <div class="h-6 w-px bg-white/10"></div>
+                <div class="h-5 w-px bg-white/10"></div>
 
                 <!-- Active Turn Indicator -->
-                <div id="turn-badge" class="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/5 border border-white/10 transition-all duration-300">
-                    <span id="turn-dot" class="w-3 h-3 rounded-full bg-amber-100 shadow-[0_0_8px_#fef3c7] transition-all"></span>
-                    <span id="turn-text" class="text-xs sm:text-sm font-semibold tracking-wide text-amber-50">Marble's Turn</span>
+                <div id="turn-badge" class="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 transition-all duration-300">
+                    <span id="turn-dot" class="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-amber-100 shadow-[0_0_8px_#fef3c7] transition-all shrink-0"></span>
+                    <span id="turn-text" class="text-[11px] sm:text-sm font-semibold tracking-wide text-amber-50 whitespace-nowrap">Marble's Turn</span>
                 </div>
 
                 <!-- Online Room Status Pill (Shown when in Online 1v1 Mode) -->
-                <div id="online-status-pill" class="hidden items-center gap-2 px-2.5 py-1 rounded-xl bg-purple-500/15 border border-purple-400/35 text-xs">
-                    <span id="online-presence-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                    <span id="online-role-label" class="font-medium text-purple-100">Room: ---</span>
-                    <button onclick="copyRoomCode()" class="md-btn px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-amber-200 flex items-center gap-1" title="Copy Room Code">
+                <div id="online-status-pill" class="hidden items-center gap-1.5 sm:gap-2 px-2 py-1 rounded-xl bg-purple-500/15 border border-purple-400/35 text-[11px] sm:text-xs">
+                    <span id="online-presence-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+                    <span id="online-role-label" class="font-medium text-purple-100 truncate max-w-[115px] sm:max-w-none">Room: ---</span>
+                    <button onclick="copyRoomCode()" class="md-btn px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-amber-200 flex items-center gap-0.5 shrink-0" title="Copy Room Code">
                         <span class="material-symbols-rounded" style="font-size:13px;">content_copy</span>
                         <span id="online-code-text">COPY</span>
                     </button>
-                    <button onclick="openOnlineLobbyModal()" class="md-btn px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-slate-200 flex items-center gap-0.5" title="Open Online Sanctuary Lobby">
+                    <button onclick="openOnlineLobbyModal()" class="md-btn px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-slate-200 flex items-center gap-0.5 shrink-0" title="Open Online Sanctuary Lobby">
                         <span class="material-symbols-rounded" style="font-size:13px;">hub</span>
                         <span class="hidden sm:inline">Rooms</span>
                     </button>
                 </div>
 
                 <!-- Check / Game Status Tag -->
-                <div id="status-tag" class="hidden items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-400/40 text-red-200 text-xs font-semibold check-alert">
-                    <span class="material-symbols-rounded text-sm">warning</span>
+                <div id="status-tag" class="hidden items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-red-500/20 border border-red-400/40 text-red-200 text-[10px] sm:text-xs font-semibold check-alert">
+                    <span class="material-symbols-rounded text-xs sm:text-sm">warning</span>
                     <span id="status-tag-text">CHECK!</span>
                 </div>
             </div>
 
             <!-- Captured Pieces & Move Strip Card -->
-            <div class="md-card pointer-events-auto rounded-2xl px-3.5 py-2 flex items-center gap-3 max-w-full overflow-hidden">
-                <!-- Captured by White (Obsidian shards) -->
-                <div class="flex items-center gap-1.5" title="Obsidian Pieces Shattered by Marble">
-                    <span class="w-2 h-2 rounded-full bg-purple-400/80"></span>
-                    <div id="captured-black" class="flex items-center text-xs sm:text-sm tracking-tighter text-purple-300 min-w-[28px] font-medium">
-                        <span class="text-slate-500 text-[11px]">0</span>
+            <div class="md-card pointer-events-auto rounded-2xl px-2.5 py-1.5 sm:px-3.5 sm:py-2 flex items-center justify-between sm:justify-start gap-2.5 sm:gap-3 w-full sm:w-auto max-w-full overflow-hidden">
+                <div class="flex items-center gap-2.5 shrink-0">
+                    <!-- Captured by White (Obsidian shards) -->
+                    <div class="flex items-center gap-1" title="Obsidian Pieces Shattered by Marble">
+                        <span class="w-2 h-2 rounded-full bg-purple-400/80 shrink-0"></span>
+                        <div id="captured-black" class="flex items-center text-xs sm:text-sm tracking-tighter text-purple-300 min-w-[20px] font-medium">
+                            <span class="text-slate-500 text-[11px]">0</span>
+                        </div>
+                    </div>
+
+                    <div class="h-3.5 w-px bg-white/10"></div>
+
+                    <!-- Captured by Black (Marble shards) -->
+                    <div class="flex items-center gap-1" title="Marble Pieces Shattered by Obsidian">
+                        <span class="w-2 h-2 rounded-full bg-amber-200/90 shrink-0"></span>
+                        <div id="captured-white" class="flex items-center text-xs sm:text-sm tracking-tighter text-amber-100 min-w-[20px] font-medium">
+                            <span class="text-slate-500 text-[11px]">0</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="h-4 w-px bg-white/10"></div>
+                <div class="h-3.5 w-px bg-white/10"></div>
 
-                <!-- Captured by Black (Marble shards) -->
-                <div class="flex items-center gap-1.5" title="Marble Pieces Shattered by Obsidian">
-                    <span class="w-2 h-2 rounded-full bg-amber-200/90"></span>
-                    <div id="captured-white" class="flex items-center text-xs sm:text-sm tracking-tighter text-amber-100 min-w-[28px] font-medium">
-                        <span class="text-slate-500 text-[11px]">0</span>
-                    </div>
-                </div>
-
-                <div class="h-4 w-px bg-white/10 hidden md:block"></div>
-
-                <!-- Horizontal Scrollable Move Notation Strip -->
-                <div id="move-history-strip" class="hidden md:flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-[240px] lg:max-w-[340px] text-xs text-slate-300">
-                    <span class="text-slate-500 italic text-[11px]">Select a piece to command...</span>
+                <!-- Horizontal Scrollable Move Notation Strip (Visible on Mobile & Desktop) -->
+                <div id="move-history-strip" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 sm:max-w-[220px] lg:max-w-[340px] text-[11px] sm:text-xs text-slate-300">
+                    <span class="text-slate-500 italic text-[11px] truncate">Tap a piece to command...</span>
                 </div>
             </div>
         </div>
     </header>
 
     <!-- Floating Instruction / Action Toast -->
-    <div id="action-toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-2">
-        <div class="md-card px-4 py-2 rounded-full border border-amber-300/30 text-amber-100 text-xs sm:text-sm font-medium flex items-center gap-2 shadow-2xl">
-            <span class="material-symbols-rounded text-amber-300 text-base">auto_fix_high</span>
-            <span id="action-toast-text">Obsidian Knight shattered!</span>
+    <div id="action-toast" class="fixed top-24 sm:top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-2 w-max max-w-[92vw]">
+        <div class="md-card px-3.5 py-2 rounded-full border border-amber-300/30 text-amber-100 text-xs sm:text-sm font-medium flex items-center gap-2 shadow-2xl">
+            <span class="material-symbols-rounded text-amber-300 text-base shrink-0">auto_fix_high</span>
+            <span id="action-toast-text" class="truncate">Obsidian Knight shattered!</span>
         </div>
     </div>
 
-    <!-- Bottom Single-Level Navigation Bar (Material Design Action Dock — Strict Fair Play) -->
-    <nav class="fixed bottom-0 left-0 right-0 z-20 p-2.5 sm:p-4 pointer-events-none flex justify-center">
-        <div class="md-card pointer-events-auto rounded-2xl p-1.5 sm:px-3 sm:py-2 flex flex-wrap items-center justify-center gap-1 sm:gap-2 max-w-full">
+    <!-- Bottom Single-Level Navigation Bar (Material Design Action Dock — Mobile Ergonomic Touch Targets) -->
+    <nav class="fixed bottom-0 left-0 right-0 z-20 safe-bottom p-2 sm:p-3.5 pointer-events-none flex justify-center">
+        <div class="md-card pointer-events-auto rounded-2xl p-1.5 sm:px-3 sm:py-2 flex items-center justify-between sm:justify-center gap-1 sm:gap-2 w-full sm:w-auto max-w-full overflow-x-auto no-scrollbar">
             
             <!-- Game Mode Switch: Online 1v1, 2P Pass & Play, or vs Archmage AI -->
-            <div class="flex items-center bg-black/30 rounded-xl p-1 border border-white/5">
-                <button id="btn-mode-online" onclick="setGameMode('online')" class="md-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 flex items-center gap-1.5 border border-transparent">
+            <div class="flex items-center bg-black/35 rounded-xl p-0.5 sm:p-1 border border-white/5 shrink-0">
+                <button id="btn-mode-online" onclick="setGameMode('online')" class="md-btn px-2 sm:px-2.5 py-2 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium text-slate-300 flex items-center gap-1 border border-transparent min-h-[36px] sm:min-h-0" title="Online 1v1 Multiplayer">
                     <span class="material-symbols-rounded text-base text-purple-300">public</span>
-                    <span>Online 1v1</span>
+                    <span>1v1</span>
                 </button>
-                <button id="btn-mode-2p" onclick="setGameMode('2p')" class="md-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 flex items-center gap-1.5 border border-transparent">
+                <button id="btn-mode-2p" onclick="setGameMode('2p')" class="md-btn px-2 sm:px-2.5 py-2 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium text-slate-300 flex items-center gap-1 border border-transparent min-h-[36px] sm:min-h-0" title="2-Player Local Pass & Play">
                     <span class="material-symbols-rounded text-base">group</span>
-                    <span>2P Local</span>
+                    <span>2P</span>
                 </button>
-                <button id="btn-mode-ai" onclick="setGameMode('ai')" class="md-btn md-btn-active px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border border-transparent">
+                <button id="btn-mode-ai" onclick="setGameMode('ai')" class="md-btn md-btn-active px-2 sm:px-2.5 py-2 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium flex items-center gap-1 border border-transparent min-h-[36px] sm:min-h-0" title="Play vs Archmage AI">
                     <span class="material-symbols-rounded text-base">smart_toy</span>
-                    <span>vs AI</span>
+                    <span>AI</span>
                 </button>
             </div>
 
-            <div class="h-6 w-px bg-white/10 hidden sm:block"></div>
+            <div class="h-5 w-px bg-white/10 shrink-0"></div>
 
             <!-- Camera View Presets -->
-            <div class="flex items-center bg-black/30 rounded-xl p-1 border border-white/5">
-                <button id="cam-white" onclick="setCameraPreset('white')" class="md-btn md-btn-active px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 border border-transparent" title="Marble Side Camera">
+            <div class="flex items-center bg-black/35 rounded-xl p-0.5 sm:p-1 border border-white/5 shrink-0">
+                <button id="cam-white" onclick="setCameraPreset('white')" class="md-btn md-btn-active px-2 sm:px-2.5 py-2 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium flex items-center gap-1 border border-transparent min-h-[36px] sm:min-h-0" title="Marble Side Camera">
                     <span class="material-symbols-rounded text-base">person</span>
                     <span class="hidden md:inline">Marble</span>
                 </button>
-                <button id="cam-black" onclick="setCameraPreset('black')" class="md-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 flex items-center gap-1 border border-transparent" title="Obsidian Side Camera">
+                <button id="cam-black" onclick="setCameraPreset('black')" class="md-btn px-2 sm:px-2.5 py-2 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium text-slate-300 flex items-center gap-1 border border-transparent min-h-[36px] sm:min-h-0" title="Obsidian Side Camera">
                     <span class="material-symbols-rounded text-base">visibility</span>
                     <span class="hidden md:inline">Obsidian</span>
                 </button>
-                <button id="cam-top" onclick="setCameraPreset('top')" class="md-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 flex items-center gap-1 border border-transparent" title="Tactical Overhead View">
+                <button id="cam-top" onclick="setCameraPreset('top')" class="md-btn px-2 sm:px-2.5 py-2 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium text-slate-300 flex items-center gap-1 border border-transparent min-h-[36px] sm:min-h-0" title="Tactical Overhead View">
                     <span class="material-symbols-rounded text-base">grid_view</span>
                     <span class="hidden md:inline">Altar Top</span>
                 </button>
-                <button id="cam-cinematic" onclick="setCameraPreset('cinematic')" class="md-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 flex items-center gap-1 border border-transparent" title="Cathedral Nave Angle">
+                <button id="cam-cinematic" onclick="setCameraPreset('cinematic')" class="md-btn px-2 sm:px-2.5 py-2 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium text-slate-300 flex items-center gap-1 border border-transparent min-h-[36px] sm:min-h-0" title="Cathedral Nave Angle">
                     <span class="material-symbols-rounded text-base">videocam</span>
                     <span class="hidden md:inline">Cathedral</span>
                 </button>
             </div>
 
-            <div class="h-6 w-px bg-white/10 hidden sm:block"></div>
+            <div class="h-5 w-px bg-white/10 shrink-0"></div>
 
-            <!-- Strict Fair Play Actions: Audio, Resign, & New Game / Rematch (No Cheats/Hints/Takebacks) -->
-            <div class="flex items-center gap-1.5">
-                <button id="btn-sound" onclick="toggleAudio()" class="md-btn p-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-200 flex items-center justify-center" title="Toggle Cathedral & Shatter Audio">
+            <!-- Strict Fair Play Actions: Audio, Resign, & New Game / Rematch -->
+            <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                <button id="btn-sound" onclick="toggleAudio()" class="md-btn p-2 sm:p-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-200 flex items-center justify-center min-h-[36px] min-w-[36px] sm:min-h-0 sm:min-w-0" title="Toggle Cathedral & Shatter Audio">
                     <span id="sound-icon" class="material-symbols-rounded text-base">volume_up</span>
                 </button>
 
-                <button id="btn-resign" onclick="promptResignGame()" class="md-btn px-2.5 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-400/30 text-xs font-medium text-red-200 flex items-center gap-1" title="Forfeit / Resign Current Match">
+                <button id="btn-resign" onclick="promptResignGame()" class="md-btn px-2.5 py-2 sm:py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-400/30 text-[11px] sm:text-xs font-medium text-red-200 flex items-center gap-1 min-h-[36px] sm:min-h-0" title="Forfeit / Resign Current Match">
                     <span class="material-symbols-rounded text-base">flag</span>
                     <span class="hidden sm:inline">Resign</span>
                 </button>
 
-                <button id="btn-new-game" onclick="handleNewGameButton()" class="md-btn px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 text-xs font-semibold text-amber-100 flex items-center gap-1.5">
+                <button id="btn-new-game" onclick="handleNewGameButton()" class="md-btn px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 text-[11px] sm:text-xs font-semibold text-amber-100 flex items-center gap-1 min-h-[36px] sm:min-h-0">
                     <span class="material-symbols-rounded text-base">restart_alt</span>
-                    <span id="btn-new-game-label">New Game</span>
+                    <span id="btn-new-game-label" class="whitespace-nowrap">New</span>
                 </button>
             </div>
         </div>
     </nav>
 
-    <!-- Online 1v1 Sanctuary Matchmaking Modal (Material Design Dialog) -->
-    <div id="online-lobby-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/75 backdrop-blur-md p-4">
-        <div class="md-card rounded-3xl p-5 sm:p-6 max-w-lg w-full border border-purple-300/25 space-y-4">
+    <!-- Online 1v1 Sanctuary Matchmaking Modal (Material Design Dialog — Scrollable on Small Screens) -->
+    <div id="online-lobby-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
+        <div class="md-card rounded-3xl p-4 sm:p-6 max-w-lg w-full max-h-[90dvh] overflow-y-auto border border-purple-300/25 space-y-3.5 sm:space-y-4 my-auto">
             <div class="flex items-center justify-between border-b border-white/10 pb-3">
                 <div class="flex items-center gap-2.5">
                     <div class="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-400/35 flex items-center justify-center text-purple-300">
@@ -749,16 +774,40 @@
         let selectedSquare = null;
         let legalMovesForSelected = [];
         let pendingPromotionMove = null;
+        let activeCameraPreset = 'white';
+
+        // Mobile & Responsive Viewport Helpers
+        function isMobileDevice() {
+            return window.innerWidth < 768 || ('ontouchstart' in window && window.innerWidth < 1024);
+        }
+
+        function getResponsiveRadiusScale() {
+            const aspect = window.innerWidth / Math.max(window.innerHeight, 1);
+            // In mobile portrait mode (aspect < 1), pull the camera back so the entire 8x8 altar fits comfortably between thumbs
+            if (aspect < 0.52) return 1.52;
+            if (aspect < 0.65) return 1.38;
+            if (aspect < 0.85) return 1.22;
+            if (aspect < 1.1) return 1.08;
+            return 1.0;
+        }
+
+        function getResponsiveFov() {
+            const aspect = window.innerWidth / Math.max(window.innerHeight, 1);
+            if (aspect < 0.65) return 52;
+            if (aspect < 1.0) return 47;
+            return 42;
+        }
 
         // Camera Orbit State
         const cameraState = {
             theta: 0,              // Horizontal angle
             phi: 0.92,             // Vertical polar angle
             radius: 15.8,          // Distance from altar center
+            baseRadius: 15.8,      // Unscaled preset distance
             targetTheta: 0,
             targetPhi: 0.92,
             targetRadius: 15.8,
-            lookAtTarget: new THREE.Vector3(0, 0.6, 0),
+            lookAtTarget: new THREE.Vector3(0, 0.5, 0),
             shakeIntensity: 0
         };
 
@@ -766,6 +815,8 @@
         let pointerDownPos = { x: 0, y: 0 };
         let prevPointerPos = { x: 0, y: 0 };
         let pointerMovedDistance = 0;
+        let pinchStartDistance = 0;
+        let pinchStartRadius = 15.8;
 
         // Shared Materials
         let whitePieceMat, whiteGoldAccentMat, blackPieceMat, blackRuneMat;
@@ -780,14 +831,24 @@
             scene.background = new THREE.Color(0x07080d);
             scene.fog = new THREE.FogExp2(0x07080d, 0.022);
 
-            camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 150);
+            const mobile = isMobileDevice();
+            camera = new THREE.PerspectiveCamera(
+                getResponsiveFov(),
+                window.innerWidth / window.innerHeight,
+                0.1,
+                150
+            );
             clock = new THREE.Clock();
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer = new THREE.WebGLRenderer({
+                antialias: !mobile || window.devicePixelRatio < 2,
+                powerPreference: 'high-performance'
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            // Cap pixelRatio on mobile high-DPI screens for silky-smooth 60fps performance
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.6 : 2));
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.type = mobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.15;
             container.appendChild(renderer.domElement);
@@ -797,6 +858,8 @@
             buildGothicCathedral();
             buildStoneAltarAndBoard();
             syncPiecesWithBoardState();
+            setCameraPreset('white');
+            cameraState.radius = cameraState.targetRadius;
             setupInteractionListeners();
             updateHUD();
         }
@@ -864,6 +927,8 @@
             scene.add(ambient);
 
             // Dramatic Overhead Cathedral Vault Spotlight casting crisp shadows on the altar
+            const mobile = isMobileDevice();
+            const shadowRes = mobile ? 1024 : 2048;
             const mainSpot = new THREE.SpotLight(0xfff4e0, 2.2);
             mainSpot.position.set(4, 21, 6);
             mainSpot.angle = Math.PI / 4;
@@ -871,8 +936,8 @@
             mainSpot.decay = 1.2;
             mainSpot.distance = 55;
             mainSpot.castShadow = true;
-            mainSpot.shadow.mapSize.width = 2048;
-            mainSpot.shadow.mapSize.height = 2048;
+            mainSpot.shadow.mapSize.width = shadowRes;
+            mainSpot.shadow.mapSize.height = shadowRes;
             mainSpot.shadow.bias = -0.0005;
             scene.add(mainSpot);
 
@@ -1440,6 +1505,17 @@
                 }
             }
 
+            // Invisible touch hitbox cylinder so tapping slender pieces on mobile screens is effortless
+            const touchHitGeo = new THREE.CylinderGeometry(0.56, 0.56, 2.1, 8);
+            const touchHitMat = new THREE.MeshBasicMaterial({
+                transparent: true,
+                opacity: 0,
+                depthWrite: false
+            });
+            const touchHitMesh = new THREE.Mesh(touchHitGeo, touchHitMat);
+            touchHitMesh.position.y = 1.05;
+            group.add(touchHitMesh);
+
             group.userData = {
                 type,
                 color,
@@ -1517,8 +1593,8 @@
             scene.add(ringMesh);
             shockwaves.push({ mesh: ringMesh, age: 0, maxAge: 0.65 });
 
-            // 2. Spawn 34 Irregular 3D Stone/Obsidian Shards & Glowing Core Fragments
-            const shardCount = 34;
+            // 2. Spawn 3D Stone/Obsidian Shards & Glowing Core Fragments (Scaled for Mobile GPU)
+            const shardCount = isMobileDevice() ? 22 : 34;
             for (let i = 0; i < shardCount; i++) {
                 const isRuneShard = i % 4 === 0;
                 const radius = isRuneShard
@@ -2089,7 +2165,7 @@
             if (gameMode === 'online') {
                 onlinePill.classList.remove('hidden');
                 onlinePill.classList.add('flex');
-                newGameLabel.textContent = isGameOver ? 'Rematch' : 'Online Lobby';
+                newGameLabel.textContent = isGameOver ? 'Rematch' : 'Lobby';
 
                 if (onlineState.roomCode && onlineState.roomData) {
                     const mySideName = onlineState.playerColor === 'w' ? 'Marble (W)' : 'Obsidian (B)';
@@ -2097,22 +2173,22 @@
                     onlineCodeText.textContent = onlineState.roomCode;
 
                     if (isWaiting) {
-                        onlineDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
-                        onlineRoleLabel.textContent = `${mySideName} • Waiting for Challenger`;
+                        onlineDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0';
+                        onlineRoleLabel.textContent = `${mySideName} • Waiting`;
                     } else {
-                        onlineDot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]';
+                        onlineDot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399] shrink-0';
                         const isMyTurn = turn === onlineState.playerColor;
-                        onlineRoleLabel.textContent = `${mySideName} • ${isMyTurn ? 'Your Move' : "Opponent's Move"}`;
+                        onlineRoleLabel.textContent = `${mySideName} • ${isMyTurn ? 'Your Move' : "Opponent"}`;
                     }
                 } else {
-                    onlineDot.className = 'w-2 h-2 rounded-full bg-slate-400';
-                    onlineRoleLabel.textContent = 'No Room Joined';
+                    onlineDot.className = 'w-2 h-2 rounded-full bg-slate-400 shrink-0';
+                    onlineRoleLabel.textContent = 'No Room';
                     onlineCodeText.textContent = 'LOBBY';
                 }
             } else {
                 onlinePill.classList.add('hidden');
                 onlinePill.classList.remove('flex');
-                newGameLabel.textContent = 'New Game';
+                newGameLabel.textContent = isMobileDevice() ? 'New' : 'New Game';
             }
 
             if (turn === 'w') {
@@ -2183,7 +2259,7 @@
             // Update Move History Strip
             const stripEl = document.getElementById('move-history-strip');
             if (history.length === 0) {
-                stripEl.innerHTML = '<span class="text-slate-500 italic text-[11px]">Select a piece to command...</span>';
+                stripEl.innerHTML = '<span class="text-slate-500 italic text-[11px] truncate">Tap a piece to command...</span>';
             } else {
                 let html = '';
                 for (let i = 0; i < history.length; i += 2) {
@@ -2233,28 +2309,33 @@
         }
 
         function setCameraPreset(preset) {
+            activeCameraPreset = preset;
             ['white', 'black', 'top', 'cinematic'].forEach(id => {
                 const el = document.getElementById(`cam-${id}`);
                 if (el) el.classList.toggle('md-btn-active', id === preset);
             });
 
+            const scale = getResponsiveRadiusScale();
+
             if (preset === 'white') {
                 cameraState.targetTheta = 0;
-                cameraState.targetPhi = 0.92;
-                cameraState.targetRadius = 15.8;
+                cameraState.targetPhi = 0.90;
+                cameraState.baseRadius = 15.6;
             } else if (preset === 'black') {
                 cameraState.targetTheta = Math.PI;
-                cameraState.targetPhi = 0.92;
-                cameraState.targetRadius = 15.8;
+                cameraState.targetPhi = 0.90;
+                cameraState.baseRadius = 15.6;
             } else if (preset === 'top') {
                 cameraState.targetTheta = 0;
-                cameraState.targetPhi = 0.18;
-                cameraState.targetRadius = 17.5;
+                cameraState.targetPhi = 0.16;
+                cameraState.baseRadius = 17.2;
             } else if (preset === 'cinematic') {
                 cameraState.targetTheta = -0.68;
-                cameraState.targetPhi = 1.08;
-                cameraState.targetRadius = 18.2;
+                cameraState.targetPhi = 1.06;
+                cameraState.baseRadius = 18.0;
             }
+
+            cameraState.targetRadius = Math.min(26.5, cameraState.baseRadius * scale);
         }
 
         function toggleAudio() {
@@ -2401,7 +2482,7 @@
         }
 
         /***********************************************************************
-         * 10. POINTER / RAYCASTER & CAMERA ORBIT INTERACTION
+         * 10. POINTER / RAYCASTER & CAMERA ORBIT INTERACTION (Mobile Pinch & Tap Optimized)
          ***********************************************************************/
         function setupInteractionListeners() {
             const dom = renderer.domElement;
@@ -2426,24 +2507,29 @@
                 prevPointerPos.x = clientX;
                 prevPointerPos.y = clientY;
 
-                // Orbit camera smoothly around the Gothic altar
-                cameraState.targetTheta -= dx * 0.0065;
-                cameraState.targetPhi = Math.max(0.16, Math.min(1.38, cameraState.targetPhi - dy * 0.0055));
+                // Orbit sensitivity tuned for both touch screens and desktop mice
+                const rotScale = isMobileDevice() ? 0.008 : 0.0065;
+                cameraState.targetTheta -= dx * rotScale;
+                cameraState.targetPhi = Math.max(0.14, Math.min(1.38, cameraState.targetPhi - dy * 0.006));
             }
 
-            function handleUp(clientX, clientY) {
+            function handleUp(clientX, clientY, isTouch = false) {
                 if (!isPointerDown) return;
                 isPointerDown = false;
 
-                // Treat as a board click/tap if pointer barely moved
-                if (pointerMovedDistance < 9) {
+                // Forgiving tap threshold on mobile touchscreens (16px) vs mouse (9px)
+                const tapThreshold = isTouch ? 16 : 9;
+                if (pointerMovedDistance < tapThreshold) {
+                    // Unlock WebAudio context on first mobile tap
+                    sound.init();
+
                     const rect = dom.getBoundingClientRect();
                     mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
                     mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
                     raycaster.setFromCamera(mouse, camera);
 
-                    // Collect all interactive targets: tiles, highlights, and pieces
+                    // Collect all interactive targets: tiles, highlights, and pieces (with invisible touch hitboxes)
                     const pieceRoots = Object.values(pieceMeshes);
                     const targets = [...boardSquares, ...highlightMeshes, ...pieceRoots];
                     const intersects = raycaster.intersectObjects(targets, true);
@@ -2463,37 +2549,67 @@
             // Mouse events
             dom.addEventListener('mousedown', e => handleDown(e.clientX, e.clientY));
             window.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
-            window.addEventListener('mouseup', e => handleUp(e.clientX, e.clientY));
+            window.addEventListener('mouseup', e => handleUp(e.clientX, e.clientY, false));
 
-            // Touch events for mobile & tablet
+            // Multi-touch events for mobile & tablet (1-finger orbit + tap, 2-finger pinch-to-zoom)
             dom.addEventListener('touchstart', e => {
                 if (e.touches.length === 1) {
                     handleDown(e.touches[0].clientX, e.touches[0].clientY);
+                } else if (e.touches.length === 2) {
+                    // Cancel single-finger tap when second finger touches for pinch-zoom
+                    isPointerDown = false;
+                    pointerMovedDistance = 999;
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    pinchStartDistance = Math.hypot(dx, dy);
+                    pinchStartRadius = cameraState.targetRadius;
                 }
             }, { passive: true });
 
             window.addEventListener('touchmove', e => {
-                if (e.touches.length === 1) {
+                if (e.touches.length === 1 && isPointerDown) {
                     handleMove(e.touches[0].clientX, e.touches[0].clientY);
+                } else if (e.touches.length === 2 && pinchStartDistance > 0) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > 10) {
+                        const pinchRatio = pinchStartDistance / dist;
+                        cameraState.targetRadius = Math.max(9.0, Math.min(28.0, pinchStartRadius * pinchRatio));
+                    }
                 }
             }, { passive: true });
 
             window.addEventListener('touchend', e => {
+                if (e.touches.length < 2) {
+                    pinchStartDistance = 0;
+                }
                 const t = e.changedTouches[0];
-                if (t) handleUp(t.clientX, t.clientY);
+                if (t && e.touches.length === 0) {
+                    handleUp(t.clientX, t.clientY, true);
+                }
             }, { passive: true });
 
             // Mouse wheel zoom
             dom.addEventListener('wheel', e => {
                 e.preventDefault();
-                cameraState.targetRadius = Math.max(9.5, Math.min(24.0, cameraState.targetRadius + e.deltaY * 0.01));
+                cameraState.targetRadius = Math.max(9.0, Math.min(28.0, cameraState.targetRadius + e.deltaY * 0.01));
             }, { passive: false });
 
-            // Responsive resize
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
+            // Responsive resize & mobile orientation change handler
+            const handleViewportResize = () => {
+                camera.fov = getResponsiveFov();
+                camera.aspect = window.innerWidth / Math.max(window.innerHeight, 1);
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
+                const scale = getResponsiveRadiusScale();
+                cameraState.targetRadius = Math.min(26.5, cameraState.baseRadius * scale);
+                updateHUD();
+            };
+
+            window.addEventListener('resize', handleViewportResize);
+            window.addEventListener('orientationchange', () => {
+                setTimeout(handleViewportResize, 150);
             });
         }
 
