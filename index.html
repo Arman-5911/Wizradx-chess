@@ -15,6 +15,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Chess.js for complete legal chess rule validation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <!-- PeerJS for Zero-Config WebRTC Online 1v1 on GitHub Pages / External Hosts -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
     <style>
         :root {
@@ -385,7 +387,7 @@
             <!-- Open Waiting Rooms List -->
             <div class="rounded-2xl bg-black/35 border border-white/10 p-3 space-y-2">
                 <div class="flex items-center justify-between">
-                    <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Open Sanctuary Challenges</span>
+                    <span id="open-rooms-header" class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Open Sanctuary Challenges</span>
                     <span id="open-rooms-count" class="text-[11px] text-purple-300 font-medium">0 waiting</span>
                 </div>
                 <div id="open-rooms-list" class="max-h-32 overflow-y-auto space-y-1.5 pr-1 text-xs">
@@ -2408,11 +2410,11 @@
 
             function handleDown(clientX, clientY) {
                 isPointerDown = true;
-                pointerMovedDistance = 0;
                 pointerDownPos.x = clientX;
                 pointerDownPos.y = clientY;
                 prevPointerPos.x = clientX;
                 prevPointerPos.y = clientY;
+                pointerMovedDistance = 0;
             }
 
             function handleMove(clientX, clientY) {
@@ -2421,18 +2423,19 @@
                 const dy = clientY - prevPointerPos.y;
                 pointerMovedDistance += Math.hypot(dx, dy);
 
-                cameraState.targetTheta -= dx * 0.0075;
-                cameraState.targetPhi = Math.max(0.18, Math.min(1.38, cameraState.targetPhi - dy * 0.0065));
-
                 prevPointerPos.x = clientX;
                 prevPointerPos.y = clientY;
+
+                // Orbit camera smoothly around the Gothic altar
+                cameraState.targetTheta -= dx * 0.0065;
+                cameraState.targetPhi = Math.max(0.16, Math.min(1.38, cameraState.targetPhi - dy * 0.0055));
             }
 
             function handleUp(clientX, clientY) {
                 if (!isPointerDown) return;
                 isPointerDown = false;
 
-                // Treat as a click/tap if the pointer barely dragged
+                // Treat as a board click/tap if pointer barely moved
                 if (pointerMovedDistance < 9) {
                     const rect = dom.getBoundingClientRect();
                     mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -2440,59 +2443,53 @@
 
                     raycaster.setFromCamera(mouse, camera);
 
-                    // Collect all interactive meshes (board tiles + pieces)
+                    // Collect all interactive targets: tiles, highlights, and pieces
                     const pieceRoots = Object.values(pieceMeshes);
-                    const targets = [...boardSquares, ...highlightMeshes];
-                    pieceRoots.forEach(group => {
-                        group.traverse(child => {
-                            if (child.isMesh) targets.push(child);
-                        });
-                    });
+                    const targets = [...boardSquares, ...highlightMeshes, ...pieceRoots];
+                    const intersects = raycaster.intersectObjects(targets, true);
 
-                    const intersects = raycaster.intersectObjects(targets, false);
                     if (intersects.length > 0) {
-                        let hitObj = intersects[0].object;
-                        while (hitObj && !hitObj.userData.square && hitObj.parent) {
-                            hitObj = hitObj.parent;
+                        let obj = intersects[0].object;
+                        while (obj && !obj.userData.square && obj.parent) {
+                            obj = obj.parent;
                         }
-                        if (hitObj && hitObj.userData && hitObj.userData.square) {
-                            onSquareClicked(hitObj.userData.square);
+                        if (obj && obj.userData && obj.userData.square) {
+                            onSquareClicked(obj.userData.square);
                         }
                     }
                 }
             }
 
-            // Mouse Events
+            // Mouse events
             dom.addEventListener('mousedown', e => handleDown(e.clientX, e.clientY));
             window.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
             window.addEventListener('mouseup', e => handleUp(e.clientX, e.clientY));
 
-            // Wheel Zoom
-            dom.addEventListener('wheel', e => {
-                e.preventDefault();
-                cameraState.targetRadius = Math.max(9.5, Math.min(25.0, cameraState.targetRadius + e.deltaY * 0.01));
-            }, { passive: false });
-
-            // Touch Events
+            // Touch events for mobile & tablet
             dom.addEventListener('touchstart', e => {
                 if (e.touches.length === 1) {
                     handleDown(e.touches[0].clientX, e.touches[0].clientY);
                 }
             }, { passive: true });
 
-            dom.addEventListener('touchmove', e => {
+            window.addEventListener('touchmove', e => {
                 if (e.touches.length === 1) {
                     handleMove(e.touches[0].clientX, e.touches[0].clientY);
                 }
             }, { passive: true });
 
-            dom.addEventListener('touchend', e => {
-                if (e.changedTouches.length > 0) {
-                    handleUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-                }
+            window.addEventListener('touchend', e => {
+                const t = e.changedTouches[0];
+                if (t) handleUp(t.clientX, t.clientY);
             }, { passive: true });
 
-            // Responsive Resize
+            // Mouse wheel zoom
+            dom.addEventListener('wheel', e => {
+                e.preventDefault();
+                cameraState.targetRadius = Math.max(9.5, Math.min(24.0, cameraState.targetRadius + e.deltaY * 0.01));
+            }, { passive: false });
+
+            // Responsive resize
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
@@ -2501,7 +2498,7 @@
         }
 
         /***********************************************************************
-         * 11. MAIN ANIMATION LOOP (Idle Breathing, Shards, Dust & Camera)
+         * 11. MAIN 3D RENDER LOOP (Camera Orbit, Piece Idle & Shatter Physics)
          ***********************************************************************/
         function animate() {
             requestAnimationFrame(animate);
@@ -2509,93 +2506,94 @@
             const dt = Math.min(clock.getDelta(), 0.05);
             const elapsed = clock.getElapsedTime();
 
-            // 1. Smoothly Interpolate Camera Orbit & Apply Shatter Impact Shake
+            // 1. Smoothly interpolate camera spherical coordinates
             cameraState.theta += (cameraState.targetTheta - cameraState.theta) * 0.09;
             cameraState.phi += (cameraState.targetPhi - cameraState.phi) * 0.09;
             cameraState.radius += (cameraState.targetRadius - cameraState.radius) * 0.09;
 
-            const camX = cameraState.radius * Math.sin(cameraState.phi) * Math.sin(cameraState.theta);
-            const camY = cameraState.radius * Math.cos(cameraState.phi);
-            const camZ = cameraState.radius * Math.sin(cameraState.phi) * Math.cos(cameraState.theta);
+            let camX = cameraState.radius * Math.sin(cameraState.phi) * Math.sin(cameraState.theta);
+            let camY = cameraState.radius * Math.cos(cameraState.phi);
+            let camZ = cameraState.radius * Math.sin(cameraState.phi) * Math.cos(cameraState.theta);
 
-            camera.position.set(camX, camY, camZ);
-
+            // Apply impact camera shake when a piece is shattered
             if (cameraState.shakeIntensity > 0.002) {
-                camera.position.x += (Math.random() - 0.5) * cameraState.shakeIntensity;
-                camera.position.y += (Math.random() - 0.5) * cameraState.shakeIntensity;
-                camera.position.z += (Math.random() - 0.5) * cameraState.shakeIntensity;
+                camX += (Math.random() - 0.5) * cameraState.shakeIntensity;
+                camY += (Math.random() - 0.5) * cameraState.shakeIntensity;
+                camZ += (Math.random() - 0.5) * cameraState.shakeIntensity;
                 cameraState.shakeIntensity *= 0.88;
             } else {
                 cameraState.shakeIntensity = 0;
             }
 
+            camera.position.set(camX, camY, camZ);
             camera.lookAt(cameraState.lookAtTarget);
 
-            // 2. Piece Idle Animations (Breathing scale, subtle sway, floating arcane crystals)
-            Object.values(pieceMeshes).forEach(pieceGroup => {
-                const { bodyGroup, floatingPart, idleOffset, baseRotationY, square } = pieceGroup.userData;
-                const phase = elapsed * 2.2 + idleOffset;
+            // 2. Custom Piece Idle Animations (Breathing poise + levitating arcane crystals)
+            for (const sq in pieceMeshes) {
+                const piece = pieceMeshes[sq];
+                if (!piece || !piece.userData) continue;
 
-                // Subtle vertical breathing & micro rotational sway
-                const isSelected = square === selectedSquare;
-                const breathScale = 1 + Math.sin(phase) * 0.016;
-                bodyGroup.scale.set(1, breathScale, 1);
-                bodyGroup.rotation.y = baseRotationY + Math.sin(phase * 0.6) * 0.04;
+                const phase = elapsed * 2.2 + piece.userData.idleOffset;
+                const bodyGroup = piece.userData.bodyGroup;
+                const floatingPart = piece.userData.floatingPart;
 
-                // Selected piece gently hovers upward
+                // Subtle idle breathing scale & selected hover elevation
                 if (!isAnimatingMove) {
-                    const targetHoverY = isSelected ? 0.22 + Math.sin(elapsed * 5) * 0.05 : 0;
-                    pieceGroup.position.y += (targetHoverY - pieceGroup.position.y) * 0.18;
+                    const isSelected = sq === selectedSquare;
+                    const targetHoverY = isSelected ? 0.24 + Math.sin(elapsed * 5) * 0.05 : 0;
+                    piece.position.y += (targetHoverY - piece.position.y) * 0.18;
                 }
 
-                // Levitating crown/orb rotation and bobbing
+                if (bodyGroup) {
+                    const breath = 1 + Math.sin(phase) * 0.014;
+                    bodyGroup.scale.set(1, breath, 1);
+                }
+
                 if (floatingPart) {
-                    floatingPart.rotation.y += dt * 1.6;
-                    floatingPart.position.y += Math.sin(phase * 1.5) * 0.0018;
+                    floatingPart.rotation.y += dt * 1.4;
+                    floatingPart.position.y += Math.sin(phase * 1.5) * 0.0015;
                 }
-            });
+            }
 
-            // 3. Update Shattered Debris Shards (Gravity, Board Bounces, Spin, Fade Out)
+            // 3. Update Shattered Stone / Obsidian Debris Shards Physics
             for (let i = activeShards.length - 1; i >= 0; i--) {
                 const s = activeShards[i];
                 s.age += dt;
 
-                // Gravity
-                s.velocity.y -= 13.5 * dt;
+                if (s.age >= s.maxAge) {
+                    scene.remove(s.mesh);
+                    if (s.mesh.geometry) s.mesh.geometry.dispose();
+                    if (s.mesh.material) s.mesh.material.dispose();
+                    activeShards.splice(i, 1);
+                    continue;
+                }
 
-                // Integrate position
+                // Gravity & velocity integration
+                s.velocity.y -= 13.5 * dt;
                 s.mesh.position.addScaledVector(s.velocity, dt);
 
-                // Rotate fragment
+                // Tumble rotation
                 s.mesh.rotation.x += s.rotSpeed.x * dt;
                 s.mesh.rotation.y += s.rotSpeed.y * dt;
                 s.mesh.rotation.z += s.rotSpeed.z * dt;
 
-                // Bounce off the chessboard surface (y = 0.05) if within altar bounds
-                const onAltar = Math.abs(s.mesh.position.x) < 6.1 && Math.abs(s.mesh.position.z) < 6.1;
-                const floorY = onAltar ? 0.05 : -3.1;
-
-                if (s.mesh.position.y < floorY) {
-                    s.mesh.position.y = floorY;
-                    s.velocity.y = Math.abs(s.velocity.y) * 0.42;
-                    s.velocity.x *= 0.72;
-                    s.velocity.z *= 0.72;
-                    s.rotSpeed.multiplyScalar(0.75);
+                // Bounce off the stone chessboard surface
+                if (s.mesh.position.y < 0.06 && s.velocity.y < 0) {
+                    const onAltar = Math.abs(s.mesh.position.x) < 6.0 && Math.abs(s.mesh.position.z) < 6.0;
+                    if (onAltar && s.bounces < 3) {
+                        s.mesh.position.y = 0.06;
+                        s.velocity.y = -s.velocity.y * 0.42;
+                        s.velocity.x *= 0.72;
+                        s.velocity.z *= 0.72;
+                        s.rotSpeed.multiplyScalar(0.75);
+                        s.bounces++;
+                    }
                 }
 
-                // Fade out smoothly during the final 35% of life
+                // Smooth fade out during final 35% of life
                 const lifeRatio = s.age / s.maxAge;
-                if (lifeRatio > 0.65) {
-                    const alpha = Math.max(0, 1 - (lifeRatio - 0.65) / 0.35);
-                    s.mesh.material.opacity = alpha;
-                    s.mesh.scale.multiplyScalar(0.985);
-                }
-
-                if (s.age >= s.maxAge) {
-                    scene.remove(s.mesh);
-                    s.mesh.geometry.dispose();
-                    s.mesh.material.dispose();
-                    activeShards.splice(i, 1);
+                if (lifeRatio > 0.65 && s.mesh.material) {
+                    s.mesh.material.opacity = Math.max(0, 1 - (lifeRatio - 0.65) / 0.35);
                 }
             }
 
@@ -2603,41 +2601,43 @@
             for (let i = shockwaves.length - 1; i >= 0; i--) {
                 const sw = shockwaves[i];
                 sw.age += dt;
-                const p = sw.age / sw.maxAge;
-                const scale = 1 + p * 5.5;
-                sw.mesh.scale.set(scale, scale, 1);
-                sw.mesh.material.opacity = Math.max(0, (1 - p) * 0.85);
-                if (sw.age >= sw.maxAge) {
+                const progress = sw.age / sw.maxAge;
+                if (progress >= 1) {
                     scene.remove(sw.mesh);
                     sw.mesh.geometry.dispose();
                     sw.mesh.material.dispose();
                     shockwaves.splice(i, 1);
+                } else {
+                    const scale = 1 + progress * 5.8;
+                    sw.mesh.scale.set(scale, scale, 1);
+                    sw.mesh.material.opacity = (1 - progress) * 0.85;
                 }
             }
 
             // 5. Animate Altar Corner Braziers & Cathedral Dust Motes
-            brazierFlames.forEach(f => {
-                f.mesh.rotation.y += dt * 2.2;
-                f.mesh.rotation.z = Math.sin(elapsed * 3.5 + f.phase) * 0.2;
-                f.mesh.position.y = f.baseHeight + Math.sin(elapsed * 4.2 + f.phase) * 0.05;
+            brazierFlames.forEach(b => {
+                const t = elapsed * 4.2 + b.phase;
+                b.mesh.position.y = b.baseHeight + Math.sin(t) * 0.05;
+                b.mesh.rotation.y += dt * 1.8;
+                const s = 0.92 + Math.sin(t * 1.7) * 0.14;
+                b.mesh.scale.set(s, s * 1.15, s);
             });
 
             if (cathedralDust) {
-                cathedralDust.rotation.y = elapsed * 0.02;
-                cathedralDust.position.y = Math.sin(elapsed * 0.4) * 0.25;
+                cathedralDust.rotation.y = elapsed * 0.025;
             }
 
             renderer.render(scene, camera);
         }
 
-        // Start the application on window load
+        // Start the 3D Cathedral & Chess application on window load
         window.onload = function () {
             initThreeScene();
             animate();
         };
     </script>
 
-    <!-- FIREBASE ONLINE 1V1 TURN-BY-TURN SYNCHRONIZATION MODULE -->
+    <!-- FIREBASE + WEBRTC (PEERJS) HYBRID ONLINE 1V1 SYNCHRONIZATION MODULE -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -2650,14 +2650,32 @@
         let currentUser = null;
         let cachedOpenRooms = [];
 
-        async function initFirebase() {
-            try {
-                if (typeof __firebase_config === 'undefined' || !__firebase_config) {
-                    const badge = document.getElementById('firebase-conn-badge');
-                    if (badge) badge.textContent = 'Offline Environment';
-                    return;
-                }
+        // WebRTC PeerJS Fallback State (Used automatically when hosted on GitHub Pages)
+        let useP2PMode = false;
+        let peerInstance = null;
+        let peerConn = null;
+        const P2P_PREFIX = 'WIZCHESS3D-SANCTUM-';
 
+        function setConnectionBadge(statusText, isOnline = true) {
+            const badge = document.getElementById('firebase-conn-badge');
+            if (!badge) return;
+            if (isOnline) {
+                badge.className = 'text-emerald-300 font-semibold flex items-center gap-1';
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span>${statusText}`;
+            } else {
+                badge.className = 'text-amber-300 font-semibold flex items-center gap-1';
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>${statusText}`;
+            }
+        }
+
+        async function initMultiplayerBackend() {
+            // Check if injected Firebase credentials exist; otherwise switch to WebRTC P2P mode for GitHub Pages
+            if (typeof __firebase_config === 'undefined' || !__firebase_config) {
+                initP2PFallbackMode();
+                return;
+            }
+
+            try {
                 const firebaseConfig = JSON.parse(__firebase_config);
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -2677,14 +2695,226 @@
                         onlineState.userId = user.uid;
                         const uidEl = document.getElementById('user-id-display');
                         if (uidEl) uidEl.textContent = user.uid;
+                        setConnectionBadge('Sanctum Cloud Connected', true);
                         subscribeToOpenRoomsList();
                     }
                 });
             } catch (err) {
-                console.error('Firebase initialization error:', err);
-                const badge = document.getElementById('firebase-conn-badge');
-                if (badge) badge.textContent = 'Connection Error';
+                console.warn('Cloud config unavailable, switching to WebRTC P2P mode:', err);
+                initP2PFallbackMode();
             }
+        }
+
+        function initP2PFallbackMode() {
+            useP2PMode = true;
+            const randomId = 'WIZ-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+            onlineState.ready = true;
+            onlineState.userId = randomId;
+
+            const uidEl = document.getElementById('user-id-display');
+            if (uidEl) uidEl.textContent = `${randomId} (Direct P2P)`;
+
+            setConnectionBadge('Global WebRTC P2P Ready', true);
+
+            const headerEl = document.getElementById('open-rooms-header');
+            const countEl = document.getElementById('open-rooms-count');
+            const listEl = document.getElementById('open-rooms-list');
+            if (headerEl) headerEl.textContent = 'Direct Room Code Matchmaking (GitHub Pages P2P)';
+            if (countEl) countEl.textContent = 'P2P Active';
+            if (listEl) {
+                listEl.innerHTML = `
+                    <div class="px-3 py-2 rounded-xl bg-purple-500/10 border border-purple-400/25 text-[11px] text-slate-300 leading-relaxed">
+                        <strong class="text-amber-200">How to play 1v1 on GitHub Pages:</strong> Click <strong>Create Room</strong> to generate a 6-character code (or click <strong>Quick Match</strong> to join the public queue), then share the code with your friend to connect peer-to-peer!
+                    </div>
+                `;
+            }
+        }
+
+        function cleanupP2P() {
+            if (peerConn) {
+                try { peerConn.close(); } catch (e) {}
+                peerConn = null;
+            }
+            if (peerInstance) {
+                try { peerInstance.destroy(); } catch (e) {}
+                peerInstance = null;
+            }
+        }
+
+        function setupP2PConnectionHandlers(conn) {
+            peerConn = conn;
+
+            conn.on('open', () => {
+                // If we are the Host and a Challenger just connected, activate the match and send full room state
+                if (onlineState.roomData && onlineState.roomData.hostId === onlineState.userId) {
+                    const hostColor = onlineState.playerColor || 'w';
+                    onlineState.roomData.status = 'active';
+                    if (hostColor === 'w') {
+                        onlineState.roomData.blackPlayerId = conn.peer || 'Challenger';
+                    } else {
+                        onlineState.roomData.whitePlayerId = conn.peer || 'Challenger';
+                    }
+
+                    conn.send({
+                        type: 'ROOM_START',
+                        roomData: onlineState.roomData
+                    });
+
+                    closeOnlineLobbyModal();
+                    sound.playSelect();
+                    setCameraPreset(hostColor === 'w' ? 'white' : 'black');
+                    updateActiveRoomModalBanner();
+                    updateHUD();
+                    showActionToast('Challenger connected via P2P! The Duel Begins!');
+                }
+            });
+
+            conn.on('data', (payload) => {
+                if (!payload || !payload.type) return;
+
+                if (payload.type === 'ROOM_START') {
+                    onlineState.roomData = payload.roomData;
+                    const hostColor = payload.roomData.whitePlayerId === payload.roomData.hostId ? 'w' : 'b';
+                    onlineState.playerColor = hostColor === 'w' ? 'b' : 'w';
+
+                    gameMode = 'online';
+                    document.getElementById('btn-mode-online').classList.add('md-btn-active');
+                    document.getElementById('btn-mode-2p').classList.remove('md-btn-active');
+                    document.getElementById('btn-mode-ai').classList.remove('md-btn-active');
+
+                    resetLocalBoardState(onlineState.playerColor === 'w' ? 'white' : 'black');
+                    closeOnlineLobbyModal();
+                    sound.playSelect();
+                    updateActiveRoomModalBanner();
+                    updateHUD();
+
+                    const roleTitle = onlineState.playerColor === 'w' ? 'Marble (White)' : 'Obsidian (Black)';
+                    showActionToast(`Connected to Room ${onlineState.roomCode} as ${roleTitle}!`);
+                } else if (payload.type === 'MOVE') {
+                    onlineState.roomData = payload.roomData;
+                    applyRemoteMoveState(payload.roomData);
+                } else if (payload.type === 'RESIGN') {
+                    onlineState.roomData = payload.roomData;
+                    if (payload.roomData.resignedBy && !matchEndedByResign) {
+                        matchEndedByResign = payload.roomData.resignedBy;
+                        updateHUD();
+                        checkGameEndState();
+                    }
+                } else if (payload.type === 'REMATCH') {
+                    onlineState.roomData = payload.roomData;
+                    if (onlineState.roomData.whitePlayerId === onlineState.userId) {
+                        onlineState.playerColor = 'w';
+                    } else {
+                        onlineState.playerColor = 'b';
+                    }
+                    resetLocalBoardState(onlineState.playerColor === 'w' ? 'white' : 'black');
+                    updateActiveRoomModalBanner();
+                    updateHUD();
+                    showActionToast('Rematch Initiated — Sides Swapped Fairly!');
+                }
+            });
+
+            conn.on('close', () => {
+                showActionToast('Opponent disconnected from the Sanctuary.');
+            });
+        }
+
+        function createP2PRoom(customRoomCode = null) {
+            if (typeof Peer === 'undefined') {
+                showActionToast('Loading P2P networking library...');
+                return;
+            }
+            cleanupP2P();
+
+            const roomCode = customRoomCode || generateRoomCode();
+            const hostColor = onlineState.hostPreferredColor || 'w';
+            const now = Date.now();
+
+            const initialRoomData = {
+                roomCode,
+                hostId: onlineState.userId,
+                whitePlayerId: hostColor === 'w' ? onlineState.userId : null,
+                blackPlayerId: hostColor === 'b' ? onlineState.userId : null,
+                status: 'waiting',
+                fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                turn: 'w',
+                moveCount: 0,
+                lastMoveJson: '',
+                moveHistoryJson: '[]',
+                resignedBy: null,
+                gameNumber: 1,
+                createdAt: now,
+                updatedAt: now
+            };
+
+            setConnectionBadge('Opening Sanctuary Room...', false);
+            peerInstance = new Peer(P2P_PREFIX + roomCode);
+
+            peerInstance.on('open', () => {
+                setConnectionBadge(`Hosting Room ${roomCode}`, true);
+                gameMode = 'online';
+                document.getElementById('btn-mode-online').classList.add('md-btn-active');
+                document.getElementById('btn-mode-2p').classList.remove('md-btn-active');
+                document.getElementById('btn-mode-ai').classList.remove('md-btn-active');
+
+                onlineState.roomCode = roomCode;
+                onlineState.playerColor = hostColor;
+                onlineState.roomData = initialRoomData;
+
+                resetLocalBoardState(hostColor === 'w' ? 'white' : 'black');
+                updateActiveRoomModalBanner();
+                updateHUD();
+                showActionToast(`Room ${roomCode} live! Share this code with your opponent.`);
+            });
+
+            peerInstance.on('connection', (conn) => {
+                if (peerConn && peerConn.open) {
+                    conn.close();
+                    return;
+                }
+                setupP2PConnectionHandlers(conn);
+            });
+
+            peerInstance.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    // If Quick Match lobby slot is already hosted by someone waiting, join it as challenger!
+                    if (customRoomCode) {
+                        joinP2PRoom(customRoomCode);
+                    } else {
+                        createP2PRoom();
+                    }
+                } else {
+                    console.error('PeerJS Host Error:', err);
+                    setConnectionBadge('P2P Network Error', false);
+                    showActionToast('Network error while creating room.');
+                }
+            });
+        }
+
+        function joinP2PRoom(rawCode) {
+            if (typeof Peer === 'undefined') {
+                showActionToast('Loading P2P networking library...');
+                return;
+            }
+            const roomCode = (rawCode || '').trim().toUpperCase();
+            if (!roomCode) return;
+
+            cleanupP2P();
+            setConnectionBadge(`Connecting to ${roomCode}...`, false);
+
+            peerInstance = new Peer();
+            peerInstance.on('open', () => {
+                const conn = peerInstance.connect(P2P_PREFIX + roomCode, { reliable: true });
+                onlineState.roomCode = roomCode;
+                setupP2PConnectionHandlers(conn);
+                setConnectionBadge(`Connected to ${roomCode}`, true);
+            });
+
+            peerInstance.on('error', (err) => {
+                console.error('PeerJS Join Error:', err);
+                setConnectionBadge('Room Not Found / Offline', false);
+                showActionToast(`Could not find active Room "${roomCode}". Check the code!`);
+            });
         }
 
         // RULE 1 & RULE 2: Strict path & simple collection query (filtering sorted in JS memory)
@@ -2770,6 +3000,10 @@
         }
 
         window.createOnlineRoom = async function () {
+            if (useP2PMode) {
+                createP2PRoom();
+                return;
+            }
             if (!currentUser || !db) {
                 showActionToast('Authenticating with Cathedral Sanctuary...');
                 return;
@@ -2814,6 +3048,10 @@
         };
 
         window.joinSpecificRoom = async function (rawCode) {
+            if (useP2PMode) {
+                joinP2PRoom(rawCode);
+                return;
+            }
             if (!currentUser || !db) {
                 showActionToast('Authenticating with Cathedral Sanctuary...');
                 return;
@@ -2884,6 +3122,12 @@
         };
 
         window.quickMatchOnline = async function () {
+            if (useP2PMode) {
+                // In P2P mode on GitHub Pages, use a shared public matchmaking channel ID:
+                // If another player is waiting in the public queue, it automatically connects to them; otherwise it hosts the public queue.
+                createP2PRoom('PUBLIC1');
+                return;
+            }
             if (!currentUser || !db) return;
             const available = cachedOpenRooms.find(r => r.hostId !== currentUser.uid);
             if (available) {
@@ -2894,6 +3138,7 @@
         };
 
         window.leaveOnlineRoom = function () {
+            cleanupP2P();
             if (onlineState.unsubscribeRoom) {
                 onlineState.unsubscribeRoom();
                 onlineState.unsubscribeRoom = null;
@@ -3032,34 +3277,46 @@
         }
 
         window.pushOnlineMove = async function (moveResult, moveCount) {
+            const historyVerbose = chess.history({ verbose: true }).map(m => ({
+                from: m.from,
+                to: m.to,
+                promotion: m.promotion || null,
+                san: m.san,
+                captured: m.captured || null,
+                color: m.color
+            }));
+
+            const updatedFields = {
+                fen: chess.fen(),
+                turn: chess.turn(),
+                moveCount: moveCount,
+                lastMoveJson: JSON.stringify({
+                    from: moveResult.from,
+                    to: moveResult.to,
+                    promotion: moveResult.promotion || null,
+                    san: moveResult.san,
+                    captured: moveResult.captured || null,
+                    color: moveResult.color,
+                    flags: moveResult.flags
+                }),
+                moveHistoryJson: JSON.stringify(historyVerbose),
+                status: chess.game_over() ? 'finished' : 'active',
+                updatedAt: Date.now()
+            };
+
+            if (useP2PMode) {
+                if (onlineState.roomData) {
+                    onlineState.roomData = { ...onlineState.roomData, ...updatedFields };
+                    if (peerConn && peerConn.open) {
+                        peerConn.send({ type: 'MOVE', roomData: onlineState.roomData });
+                    }
+                }
+                return;
+            }
+
             if (!currentUser || !db || !onlineState.roomCode) return;
             try {
-                const historyVerbose = chess.history({ verbose: true }).map(m => ({
-                    from: m.from,
-                    to: m.to,
-                    promotion: m.promotion || null,
-                    san: m.san,
-                    captured: m.captured || null,
-                    color: m.color
-                }));
-
-                await updateDoc(getMatchDocRef(onlineState.roomCode), {
-                    fen: chess.fen(),
-                    turn: chess.turn(),
-                    moveCount: moveCount,
-                    lastMoveJson: JSON.stringify({
-                        from: moveResult.from,
-                        to: moveResult.to,
-                        promotion: moveResult.promotion || null,
-                        san: moveResult.san,
-                        captured: moveResult.captured || null,
-                        color: moveResult.color,
-                        flags: moveResult.flags
-                    }),
-                    moveHistoryJson: JSON.stringify(historyVerbose),
-                    status: chess.game_over() ? 'finished' : 'active',
-                    updatedAt: Date.now()
-                });
+                await updateDoc(getMatchDocRef(onlineState.roomCode), updatedFields);
             } catch (err) {
                 console.error('Failed to push online move:', err);
                 showActionToast('Network delay while syncing move...');
@@ -3067,6 +3324,18 @@
         };
 
         window.pushOnlineResign = async function (resigningColor) {
+            if (useP2PMode) {
+                if (onlineState.roomData) {
+                    onlineState.roomData.resignedBy = resigningColor;
+                    onlineState.roomData.status = 'finished';
+                    onlineState.roomData.updatedAt = Date.now();
+                    if (peerConn && peerConn.open) {
+                        peerConn.send({ type: 'RESIGN', roomData: onlineState.roomData });
+                    }
+                }
+                return;
+            }
+
             if (!currentUser || !db || !onlineState.roomCode) return;
             try {
                 await updateDoc(getMatchDocRef(onlineState.roomCode), {
@@ -3080,32 +3349,48 @@
         };
 
         window.triggerOnlineRematch = async function () {
-            if (!currentUser || !db || !onlineState.roomCode || !onlineState.roomData) return;
-            try {
-                // Swap colors fairly on rematch
-                const prevWhite = onlineState.roomData.whitePlayerId;
-                const prevBlack = onlineState.roomData.blackPlayerId;
-                const nextGameNum = (onlineState.roomData.gameNumber || 1) + 1;
+            if (!onlineState.roomCode || !onlineState.roomData) return;
 
-                await updateDoc(getMatchDocRef(onlineState.roomCode), {
-                    whitePlayerId: prevBlack || prevWhite,
-                    blackPlayerId: prevWhite || prevBlack,
-                    status: prevWhite && prevBlack ? 'active' : 'waiting',
-                    fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-                    turn: 'w',
-                    moveCount: 0,
-                    lastMoveJson: '',
-                    moveHistoryJson: '[]',
-                    resignedBy: null,
-                    gameNumber: nextGameNum,
-                    updatedAt: Date.now()
-                });
+            const prevWhite = onlineState.roomData.whitePlayerId;
+            const prevBlack = onlineState.roomData.blackPlayerId;
+            const nextGameNum = (onlineState.roomData.gameNumber || 1) + 1;
+
+            const rematchFields = {
+                whitePlayerId: prevBlack || prevWhite,
+                blackPlayerId: prevWhite || prevBlack,
+                status: prevWhite && prevBlack ? 'active' : 'waiting',
+                fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                turn: 'w',
+                moveCount: 0,
+                lastMoveJson: '',
+                moveHistoryJson: '[]',
+                resignedBy: null,
+                gameNumber: nextGameNum,
+                updatedAt: Date.now()
+            };
+
+            if (useP2PMode) {
+                onlineState.roomData = { ...onlineState.roomData, ...rematchFields };
+                onlineState.playerColor = onlineState.playerColor === 'w' ? 'b' : 'w';
+                resetLocalBoardState(onlineState.playerColor === 'w' ? 'white' : 'black');
+                updateActiveRoomModalBanner();
+                updateHUD();
+                showActionToast('Rematch Initiated — Sides Swapped Fairly!');
+                if (peerConn && peerConn.open) {
+                    peerConn.send({ type: 'REMATCH', roomData: onlineState.roomData });
+                }
+                return;
+            }
+
+            if (!currentUser || !db) return;
+            try {
+                await updateDoc(getMatchDocRef(onlineState.roomCode), rematchFields);
             } catch (err) {
                 console.error('Failed to start rematch:', err);
             }
         };
 
-        initFirebase();
+        initMultiplayerBackend();
     </script>
 </body>
 </html>
